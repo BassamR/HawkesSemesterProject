@@ -23,7 +23,7 @@ class UnivariateHP:
 
         returns lambda*(t)
         """
-        return self.mu + sum(self.h(t - arrival) for arrival in past_arrivals if arrival < t)
+        return self.mu + sum(self.h(t - ti) for ti in past_arrivals if ti < t)
     
     # Thinning algorithm to generate arrivals
     def simulate_univariate_hp(self, T) -> np.array:
@@ -40,6 +40,7 @@ class UnivariateHP:
             M = self.intensity(t=t+eps, past_arrivals=P)
             E = np.random.exponential(1/M)
             t = t + E
+
             U = np.random.uniform(low=0, high=M)
             if t < T and U <= self.intensity(t=t, past_arrivals=P):
                 P = np.hstack([P, t])
