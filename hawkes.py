@@ -83,6 +83,54 @@ class MultivariateHP:
 
         return intensity
 
+    # def simulate_multivariate_hp(self, T):
+    #     """
+    #     T: generate process on [0, T]
+
+    #     returns P: array of times of arrivals
+    #     """
+    #     eps = 10e-10
+    #     P = [np.array([]) for _ in range(self.M)]  # list of arrivals
+    #     t = np.zeros(self.M)
+
+    #     while np.max(t) < T:
+    #         print('started big while loop')
+    #         # TODO: is successively looping on each process the best way of doing this ?
+    #         # non: avec cette methode, le 2e process ne va jamais generer la 1ere arrivee
+
+    #         # idea: at each time step, loop on all processes, find whichever one generates the first
+    #         # arrival, and keep that one as my next arrival, noting the i which generated it (like this
+    #         # I can add it to P[i])
+    #         temporary_arrivals = np.full((self.M, ), np.inf)
+    #         for i in range(0, self.M):
+    #             M = self.intensity(i=i, t=t[i]+eps, past_arrivals=P)
+
+    #             r = 1
+    #             temp_t = 0
+    #             while r >= 1:
+    #                 E = np.random.exponential(1/M)
+    #                 temp_t = t[i] + E
+
+    #                 U = np.random.uniform(low=0, high=M)
+    #                 if temp_t < T and U <= self.intensity(i=i, t=temp_t, past_arrivals=P):
+    #                     t[i] = temp_t
+    #                     temporary_arrivals[i] = t[i]
+    #                     break
+    #                 else:
+    #                     r += 1
+    #                     if r == 1000:
+    #                         print('Something went wrong with thinning algo')
+
+    #         print('max value of t is', np.max(t))
+    #         # Check which arrival came first and where it came from
+    #         first_arrival_idx = np.argmin(temporary_arrivals)
+    #         first_arrival = np.min(temporary_arrivals)
+    #         # Add that arrival to previous arrivals
+    #         #next_arrival = temporary_arrivals[first_arrival_idx]
+    #         P[first_arrival_idx] = np.hstack([P[first_arrival_idx], first_arrival])
+
+    #     return P
+
     def simulate_multivariate_hp(self, T):
         """
         T: generate process on [0, T]
@@ -91,22 +139,37 @@ class MultivariateHP:
         """
         eps = 10e-10
         P = [np.array([]) for _ in range(self.M)]  # list of arrivals
-        t = 0
+        t = np.zeros(self.M)  # array of candidate arrival times at each time step
 
-        while t < T:
-            # TODO: is successively looping on each process the best way of doing this ?
-            # non: avec cette methode, le 2e process ne va jamais generer la 1ere arrivee
+        while np.max(t) < T:
+            # For each process, determine next arrival
+            for j in range(0, self.M):
+                # Start from last recorded arrival
+                if P[j].size != 0:
+                    temp_t = P[j][-1]
+                else:
+                    temp_t = 0
 
-            # idea: at each time step, loop on all processes, find whichever one generates the first
-            # arrival, and keep that one as my next arrival, noting the i which generated it (like this
-            # I can add it to P[i])
-            for i in range(0, self.M):
-                M = self.intensity(i=i, t=t+eps, past_arrivals=P)
-                E = np.random.exponential(1/M)
-                t = t + E
+                # Find next arrival for process j
+                r = 0
+                while True:
+                    M = self.intensity(i=j, t=temp_t+eps, past_arrivals=P)
+                    E = np.random.exponential(1/M)
+                    temp_t += E
 
-                U = np.random.uniform(low=0, high=M)
-                if t < T and U <= self.intensity(i=i, t=t, past_arrivals=P):
-                    P[i] = np.hstack([P[i], t])
+                    U = np.random.uniform(low=0, high=M)
+                    if U <= self.intensity(i=j, t=temp_t, past_arrivals=P):
+                        t[j] = temp_t
+                        break
+                    else:
+                        r += 1
+                        if r==1000:
+                            print('sth went wrong with inner loop')
+            
+            # Once all M candidate arrivals have been generated, pick the first one
+            first_arrival_idx = np.argmin(t)
+            first_arrival = np.min(t)
+            # Add that arrival to previous arrivals
+            P[first_arrival_idx] = np.hstack([P[first_arrival_idx], first_arrival])
 
         return P
