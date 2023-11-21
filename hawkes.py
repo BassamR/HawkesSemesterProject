@@ -83,54 +83,6 @@ class MultivariateHP:
 
         return intensity
 
-    # def simulate_multivariate_hp(self, T):
-    #     """
-    #     T: generate process on [0, T]
-
-    #     returns P: array of times of arrivals
-    #     """
-    #     eps = 10e-10
-    #     P = [np.array([]) for _ in range(self.M)]  # list of arrivals
-    #     t = np.zeros(self.M)
-
-    #     while np.max(t) < T:
-    #         print('started big while loop')
-    #         # TODO: is successively looping on each process the best way of doing this ?
-    #         # non: avec cette methode, le 2e process ne va jamais generer la 1ere arrivee
-
-    #         # idea: at each time step, loop on all processes, find whichever one generates the first
-    #         # arrival, and keep that one as my next arrival, noting the i which generated it (like this
-    #         # I can add it to P[i])
-    #         temporary_arrivals = np.full((self.M, ), np.inf)
-    #         for i in range(0, self.M):
-    #             M = self.intensity(i=i, t=t[i]+eps, past_arrivals=P)
-
-    #             r = 1
-    #             temp_t = 0
-    #             while r >= 1:
-    #                 E = np.random.exponential(1/M)
-    #                 temp_t = t[i] + E
-
-    #                 U = np.random.uniform(low=0, high=M)
-    #                 if temp_t < T and U <= self.intensity(i=i, t=temp_t, past_arrivals=P):
-    #                     t[i] = temp_t
-    #                     temporary_arrivals[i] = t[i]
-    #                     break
-    #                 else:
-    #                     r += 1
-    #                     if r == 1000:
-    #                         print('Something went wrong with thinning algo')
-
-    #         print('max value of t is', np.max(t))
-    #         # Check which arrival came first and where it came from
-    #         first_arrival_idx = np.argmin(temporary_arrivals)
-    #         first_arrival = np.min(temporary_arrivals)
-    #         # Add that arrival to previous arrivals
-    #         #next_arrival = temporary_arrivals[first_arrival_idx]
-    #         P[first_arrival_idx] = np.hstack([P[first_arrival_idx], first_arrival])
-
-    #     return P
-
     def simulate_multivariate_hp(self, T):
         """
         T: generate process on [0, T]
