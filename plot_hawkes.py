@@ -1,5 +1,5 @@
 """
-Module containing functions useful for plotting
+Module containing functions useful for plotting realizations and intensities of HPs.
 """
 
 import numpy as np
