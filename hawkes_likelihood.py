@@ -89,7 +89,7 @@ class HawkesLikelihood():
         self.E = LikelihoodE(dim=dim, S=S, notS=notS)
 
         # Define -log(likelihood) = E(A*theta) operator (which we want to minimize)
-        self.negLogL = self.E * self.opA
+        self.negLogL = self.E * self.opA  # R^{M^2 + M} -> R, via R^{K+M}
 
         return
     
