@@ -19,7 +19,7 @@ from pyxu.abc import DiffFunc, LinOp
 import pyxu.operator as pxop
 
 # Global HP parameters
-beta = 1  # we choose this
+beta = 2  # we choose this
 betainv = 1/beta
 def g(t, beta=beta):
     return t * np.exp(-beta*t) * (t >= 0)
@@ -32,11 +32,11 @@ class LikelihoodE(DiffFunc):
         self.notS = notS
 
     def apply(self, arr):
-        return sum(-np.log(arr[self.notS])) + sum(arr[self.S])
+        return sum(-np.log(arr[self.notS]+10e-10)) + sum(arr[self.S])
 
     def grad(self, arr):
         grad = np.ones(arr.shape)
-        grad[self.notS] = -1/arr[self.notS]
+        grad[self.notS] = -1/(arr[self.notS]+10e-10)
         return grad
 
 
@@ -108,7 +108,8 @@ class HawkesLikelihood():
             self.t[i] = self.t[i][np.nonzero(self.t[i])]  # get rid of arrival times = 0
 
         self.k = [len(ti) for ti in self.t] 
-        self.T = max(max(self.t[i]) for i in range(self.M))  # TODO: Do i need T to be the last arrival, or > last arrival ?
+        # TODO: Do i need T to be the last arrival, or > last arrival ?
+        self.T = max(max(self.t[i]) for i in range(self.M)) + 10e-5
         self.K = sum(self.k)
 
         return
