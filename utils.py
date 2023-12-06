@@ -64,8 +64,13 @@ class L1NormPositivityConstraint(pxo.ProxFunc):
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
         xp = pxu.get_array_module(arr)
         res = xp.zeros_like(arr)
+        # Projection sur le nonneg orthoant: si l'array est positif appliquer le prox,
+        # sinon laisser a 0
         indices = arr > 0
-        res[indices] = xp.fmax(0, arr[indices] - tau)
+        # le proximal de la norme l1 (no sgn(arr) cuz anyways arr is positive)
+        res[indices] = xp.fmax(0, arr[indices] - tau) 
+        # TODO: replace le prox de |x|L1 par le prox de lambda*|x|L1
+        # replace tau by lambda*tau
         return res
 
 
