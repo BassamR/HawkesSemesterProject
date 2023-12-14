@@ -1,5 +1,5 @@
 """
-Author: Adrian Jarret
+Author: Adrian Jarret (+ Bassam El Rawas with some modifications)
 This file implements a few common operators, useful in the development of PFW for the LASSO problem.
 """
 
@@ -12,6 +12,7 @@ import pyxu.info.ptype as pxt
 
 __all__ = [
     "L1NormPositivityConstraint",
+    "L1NormPartialReg"
 ]
 
 # class NonNegativeOrthant(pxo.ProxFunc):
@@ -71,6 +72,29 @@ class L1NormPositivityConstraint(pxo.ProxFunc):
         res[indices] = xp.fmax(0, arr[indices] - tau) 
         # TODO: replace le prox de |x|L1 par le prox de lambda*|x|L1
         # replace tau by lambda*tau
+        return res
+
+
+class L1NormPartialReg(pxo.ProxFunc):
+    def __init__(self, shape: pxt.OpShape, S: np.array, regLambda: float):
+        super().__init__(shape=shape)
+        self.S = S  # indices which we want to regularize on
+        self.regLambda = regLambda  # regularization parameter
+
+        self.regDiag = np.zeros(self.shape[1])
+        self.regDiag[self.S] = self.regLambda
+
+    @pxrt.enforce_precision(i="arr")
+    def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
+        # lambda * l1 norm of [arr]_S = sum of lambda*arr[i] for i in S
+        return self.regLambda * sum(arr[i] for i in self.S)
+
+    @pxrt.enforce_precision(i=["arr", "tau"])
+    def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
+        xp = pxu.get_array_module(arr)
+        res = xp.zeros_like(arr)
+
+        res = np.sign(arr) * xp.fmax(0, np.abs(arr) - tau * self.regDiag)
         return res
 
 
