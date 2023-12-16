@@ -76,7 +76,11 @@ class _GenericFWLasso(pxs.Solver):
         self._data_fidelity = (
             self.hpL.negLogL
         )
-        self._penalty = self.lambda_ * pxop.L1Norm(dim=self.forwardOp.shape[1])
+        regIndices = [index for k in range(self.hpL.M) for index in range(k*self.hpL.M + k + 1, k*self.hpL.M + k + self.hpL.M + 1)]
+        self._penalty = ut.L1NormPartialReg(shape=(1, self.forwardOp.shape[1]), 
+                                             S=regIndices, 
+                                             regLambda=self.lambda_)
+        #self._penalty = self.lambda_ * pxop.L1Norm(dim=self.forwardOp.shape[1])
         #self._bound = 0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(data)[0] / self.lambda_
 
     def m_init(self, **kwargs):
@@ -107,8 +111,14 @@ class _GenericFWLasso(pxs.Solver):
         return data.get("x")
 
     def objective_func(self) -> pxt.NDArray:
-        return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ * \
-            pxop.L1Norm(self._mstate["val"].shape[0]).apply(self._mstate["val"])
+        # return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ * \
+        #     pxop.L1Norm(self._mstate["val"].shape[0]).apply(self._mstate["val"])
+        injection = pxop.SubSample(self.forwardOp.shape[1], self._mstate["pos"]).T
+
+        #print('injection:', injection(self._mstate["val"]))
+
+        return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) \
+            + self._penalty.apply(injection(self._mstate["val"]))
 
     @property
     def _dense_iterate(self):
@@ -288,15 +298,19 @@ class PFWLasso(_GenericFWLasso):
         super(PFWLasso, self).m_init(**kwargs)
         xp = pxu.get_array_module(self._mstate["val"])
         mst = self._mstate
-        mst["pos"] = xp.array([], dtype="int32")
+        # Init x0 = 1 on the mu indices, 0 on the alpha indices
+        mst["pos"] = np.array([k + k*self.hpL.M for k in range(self.hpL.M)], dtype="int32")  # indices of mu
+        mst["val"] = np.array([1 for _ in range(mst["pos"].shape[0])], dtype=pxrt.getPrecision().value)
         mst["delta"] = None  # initial buffer for multi spike thresholding
         mst["correction_prec"] = self._init_correction_prec
 
     def m_step(self):
         mst = self._mstate  # shorthand
+        #print('val:', mst["val"])
+        #print('pos:', mst['pos'])
         #mgrad = self.forwardOp.adjoint(self.data - self.rs_forwardOp(mst["pos"]).apply(mst["val"])) / self.lambda_
-        #mgrad = self.hpL.negLogL.grad(mst["val"]) / self.lambda_  # TODO: is this correct ?
         mgrad = self.forwardOp.adjoint(self.hpL.E.grad(self.rs_forwardOp(mst["pos"]).apply(mst["val"]))) / self.lambda_
+        #print('mgrad:', mgrad)
         if self._astate["positivity_c"]:
             mst["dcv"] = mgrad.max()
             maxi = mst["dcv"]
@@ -331,7 +345,6 @@ class PFWLasso(_GenericFWLasso):
                                      self._final_correction_prec)
         if mst["pos"].size > 1:
             mst["val"] = self.rs_correction(mst["pos"], self._mstate["correction_prec"])
-        # TODO: do i need this ? If so, how do I change it ?
         elif mst["pos"].size == 1:  # case 1-sparse solution => the solution can be computed explicitly
             tmp = xp.zeros(self.forwardOp.shape[1], dtype=pxrt.getPrecision().value)
             tmp[mst["pos"]] = 1.0
@@ -386,10 +399,11 @@ class PFWLasso(_GenericFWLasso):
             return stop_crit
 
         rs_data_fid = self.rs_data_fid(support_indices)
-
+        #print('rs_correction was called')
         x0 = self._mstate["val"]
         dim = x0.shape[0]
         if self._astate["positivity_c"]:
+            #print('positivity constraint called')
             penalty = ut.L1NormPositivityConstraint(shape=(1, dim))
         else:
             penalty = pxop.L1Norm(dim)
