@@ -18,11 +18,6 @@ import pandas as pd
 from pyxu.abc import DiffFunc, LinOp
 import pyxu.operator as pxop
 
-# Global HP parameters
-beta = 2  # we choose this
-betainv = 1/beta
-def g(t, beta=beta):
-    return t * np.exp(-beta*t) * (t >= 0)
 
 # Define E: R^{K+M} -> R, E(x) = -\sum_{i \not\in S} ln(x_i) + \sum_{i \in S} x_i
 class LikelihoodE(DiffFunc):
@@ -45,7 +40,7 @@ class HawkesLikelihood():
     Class that, given a realization, stores parameters relevant to it and defines the necessary
     operators to be able to represent -log(likelihood) as a Pyxu DiffMap.
     """
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, beta: float) -> None:
         # Initialize constants
         self.data = None  # list of arrival times
         self.t = None  # same as data, but for easier notation
@@ -61,6 +56,10 @@ class HawkesLikelihood():
         self.E = None  # convex likelihood operator
         self.negLogL = None  # -log(likelihood)
 
+        # Initialize HP global parameters
+        self.beta = beta  # exponential decay constant
+        self.betainv = 1/self.beta
+
         # Read neuron spike data, then convert to list of np arrays
         self.init_constants(path)
 
@@ -72,7 +71,7 @@ class HawkesLikelihood():
             ops[i] = LinOp.from_array(self.A[i]) # Define each A^j as an operator
 
         # Initialize operator A of shape (K+M, M*(1+M)) as block-diagonal
-        self.opA = pxop.block_diag(ops)  # TODO: maybe implement this in a matrix free way ?
+        self.opA = pxop.block_diag(ops)
 
         # Define subset S of {1, ..., M+K} of row indices of A which contribute to the compensator term
         S = np.zeros(self.M)  # we know that |S| = M
@@ -118,6 +117,12 @@ class HawkesLikelihood():
         """
         Computes the discrete likelihood matrix A.
         """
+        # Shorthands
+        betainv = self.betainv
+        beta = self.beta
+        g = self.g
+
+        # Initialize matrix
         self.A = [np.zeros((self.k[j]+1, self.M+1)) for j in range(self.M)]
 
         B = np.zeros(self.M)  # to help compute the last row of A^j
@@ -167,3 +172,7 @@ class HawkesLikelihood():
         ax.set_title('Matrix Coefficients')
         plt.show()
         return
+
+    def g(self, t):
+        # Causal Green's function of L = (D + beta*I)^2
+        return t * np.exp(-self.beta*t) * (t >= 0)
