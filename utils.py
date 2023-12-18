@@ -12,7 +12,8 @@ import pyxu.info.ptype as pxt
 
 __all__ = [
     "L1NormPositivityConstraint",
-    "L1NormPartialReg"
+    "L1NormPartialReg",
+    "L1NormPartialPositivityConstraint"
 ]
 
 # class NonNegativeOrthant(pxo.ProxFunc):
@@ -65,13 +66,11 @@ class L1NormPositivityConstraint(pxo.ProxFunc):
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
         xp = pxu.get_array_module(arr)
         res = xp.zeros_like(arr)
-        # Projection sur le nonneg orthoant: si l'array est positif appliquer le prox,
+        # Projection sur le nonneg orthant: si l'array est positif appliquer le prox,
         # sinon laisser a 0
         indices = arr > 0
-        # le proximal de la norme l1 (no sgn(arr) cuz anyways arr is positive)
-        res[indices] = xp.fmax(0, arr[indices] - tau) 
-        # TODO: replace le prox de |x|L1 par le prox de lambda*|x|L1
-        # replace tau by lambda*tau
+        # le proximal de la norme l1 (no sgn(arr) because anyways arr is positive)
+        res[indices] = xp.fmax(0, arr[indices] - tau)
         return res
 
 
@@ -87,7 +86,7 @@ class L1NormPartialReg(pxo.ProxFunc):
     @pxrt.enforce_precision(i="arr")
     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
         # lambda * l1 norm of [arr]_S = sum of lambda*arr[i] for i in S
-        return self.regLambda * sum(arr[i] for i in self.S)
+        return self.regLambda * sum(np.abs(arr[i]) for i in self.S)
 
     @pxrt.enforce_precision(i=["arr", "tau"])
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
@@ -95,6 +94,32 @@ class L1NormPartialReg(pxo.ProxFunc):
         res = xp.zeros_like(arr)
 
         res = np.sign(arr) * xp.fmax(0, np.abs(arr) - tau * self.regDiag)
+        return res
+    
+
+class L1NormPartialPositivityConstraint(pxo.ProxFunc):
+    def __init__(self, shape: pxt.OpShape, S: np.array, regLambda: float):
+        super().__init__(shape=shape)
+        self.S = S  # indices which we want to regularize on
+        self.regLambda = regLambda  # regularization parameter
+
+        self.regDiag = np.zeros(self.shape[1])
+        self.regDiag[self.S] = self.regLambda
+
+    @pxrt.enforce_precision(i="arr")
+    def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
+        xp = pxu.get_array_module(arr)
+        res = self.regLambda * sum(np.abs(arr[i]) for i in self.S) if xp.all(arr >= 0) else xp.inf
+        return xp.r_[res].astype(arr.dtype)
+
+    @pxrt.enforce_precision(i=["arr", "tau"])
+    def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
+        xp = pxu.get_array_module(arr)
+        res = xp.zeros_like(arr)
+        # Projection sur le nonneg orthoant: si l'array est positif appliquer le prox,
+        # sinon laisser a 0
+        indices = arr > 0
+        res[indices] = xp.fmax(0, arr[indices] - tau * self.regDiag[indices])
         return res
 
 
