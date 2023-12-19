@@ -27,7 +27,7 @@ class LikelihoodE(DiffFunc):
         self.notS = notS
 
     def apply(self, arr):
-        return sum(-np.log(arr[self.notS]+10e-10)) + sum(arr[self.S])
+        return np.array([sum(-np.log(arr[self.notS]+10e-10)) + sum(arr[self.S])])
 
     def grad(self, arr):
         grad = np.ones(arr.shape)
