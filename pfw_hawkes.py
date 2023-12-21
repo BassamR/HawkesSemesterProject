@@ -299,7 +299,9 @@ class PFWLasso(_GenericFWLasso):
         xp = pxu.get_array_module(self._mstate["val"])
         mst = self._mstate
         # Init x0 = 1 on the mu indices, 0 on the alpha indices
-        mst["pos"] = np.array([k + k*self.hpL.M for k in range(self.hpL.M)], dtype="int32")  # indices of mu
+        self.mu_indices = np.array([k + k*self.hpL.M for k in range(self.hpL.M)], dtype="int32")
+        mst["pos"] = self.mu_indices
+        #mst["pos"] = np.hstack([mst["pos"], np.array([71, 70, 69, 68, 67])])
         mst["val"] = np.array([1 for _ in range(mst["pos"].shape[0])], dtype=pxrt.getPrecision().value)
 
         print('initial value:', self.hpL.E(self.rs_forwardOp(mst["pos"]).apply(mst["val"])))
@@ -313,13 +315,12 @@ class PFWLasso(_GenericFWLasso):
         #print('pos:', mst['pos'])
         #mgrad = self.forwardOp.adjoint(self.data - self.rs_forwardOp(mst["pos"]).apply(mst["val"])) / self.lambda_
         mgrad = -self.forwardOp.adjoint(self.hpL.E.grad(self.rs_forwardOp(mst["pos"]).apply(mst["val"]))) / self.lambda_
-        mgrad = mgrad[self.regIndices]
-        #print('mgrad:', mgrad)
+        mgrad_reduced = mgrad[self.regIndices]  # gradient on regularized coordinates
         if self._astate["positivity_c"]:
-            mst["dcv"] = mgrad.max()  # TODO: take the max of mgrad or of the restricted mgrad?
+            mst["dcv"] = mgrad_reduced.max()
             maxi = mst["dcv"]
         else:
-            mst["dcv"] = max(mgrad.max(), mgrad.min(), key=abs)  # float
+            mst["dcv"] = max(mgrad_reduced.max(), mgrad_reduced.min(), key=abs)  # float
             maxi = abs(mst["dcv"])
         # mst["dcv"] is stored as a float in this case and does not handle stacked multidimensional inputs.
         if self._astate["idx"] == 1:
@@ -330,7 +331,9 @@ class PFWLasso(_GenericFWLasso):
             mst["correction_durations"] = []
         thresh = maxi - (2 / (self._astate["idx"] + 1)) * mst["delta"]
         if self._astate["positivity_c"]:
-            new_indices = (mgrad > max(thresh, 1.0)).nonzero()[0]
+            temp = (mgrad > max(thresh, 1.0))
+            temp[self.mu_indices] = 0.  # ignore mu indices when computing the atoms
+            new_indices = temp.nonzero()[0]
         else:
             new_indices = (abs(mgrad) > max(thresh, 1.0)).nonzero()[0]
         print('new indices', new_indices)
@@ -339,7 +342,7 @@ class PFWLasso(_GenericFWLasso):
         xp = pxu.get_array_module(mst["val"])
         if new_indices.size > 0:
             add_indices = new_indices[xp.invert(xp.isin(new_indices, mst["pos"]))]
-            # print("actual new indices: {}".format(add_indices.size))  # i.e. indices that are not already in the support
+            print("actual new indices: {}".format(add_indices.size))  # i.e. indices that are not already in the support
             mst["pos"] = xp.hstack([mst["pos"], add_indices])
             mst["val"] = xp.hstack([mst["val"], xp.zeros_like(add_indices)])
 
@@ -348,12 +351,17 @@ class PFWLasso(_GenericFWLasso):
 
         mst["correction_prec"] = max(self._init_correction_prec * self._prec_rule(self._astate["idx"]),
                                      self._final_correction_prec)
+        #print('Dense iterate before rs_corr:', self._dense_iterate)
         if mst["pos"].size >= 1:
             if mst["pos"].size == 1:
                 print('case 1-sparse solution')
             mst["val"] = self.rs_correction(mst["pos"], self._mstate["correction_prec"])
+            #print('Pos given to apgd', np.sort(mst["pos"]))
         else:
             mst["val"] = xp.array([], dtype=pxrt.getPrecision().value)
+
+        #print('Dense iterate after rs_corr:', self._dense_iterate)
+
         # elif mst["pos"].size == 1:  # case 1-sparse solution => the solution can be computed explicitly
         #     print('case 1-sparse solution entered')
         #     tmp = xp.zeros(self.forwardOp.shape[1], dtype=pxrt.getPrecision().value)
@@ -368,7 +376,6 @@ class PFWLasso(_GenericFWLasso):
         #     else:
         #         mst["val"] = np.r_[
         #             (corr + self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
-
 
         if self._remove_positions:
             to_keep = (abs(mst["val"]) > 1e-5).nonzero()[0]
@@ -414,6 +421,8 @@ class PFWLasso(_GenericFWLasso):
         dim = x0.shape[0]
         rs_data_fid = self._data_fidelity
 
+        #print("support indices", np.sort(support_indices))
+
         # rs_data_fid = self.rs_data_fid(support_indices)
         # x0 = self._mstate["val"]
         # dim = x0.shape[0]
@@ -422,11 +431,17 @@ class PFWLasso(_GenericFWLasso):
         # else:
         #     print('Something wrong, no positivity constraint')
         #     penalty = pxop.L1Norm(dim)
+        # apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
 
+        # quickRsForwardOp = self.rs_forwardOp(support_indices=support_indices)
+        # testX = np.ones(quickRsForwardOp.shape[1])
+        # testXimage = quickRsForwardOp(testX)
+        # print('testx:', testXimage[-20:])
+
+        # TODO: implement penalty without upsampling x0
+        # inside penalty, upsample x, apply all the stuff to it, return downsampled x
         penalty = ut.L1NormPartialPositivityConstraint(shape=(1, dim), S=self.regIndices, regLambda=self.lambda_)
         apgd = PGD(rs_data_fid, penalty, show_progress=False)
-
-        #apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
         stop = pxos.MaxIter(n=self._min_correction_steps)  # min number of reweighting steps
         if not self._astate["lock"]:
             stop &= correction_stop_crit(precision)
@@ -442,7 +457,10 @@ class PFWLasso(_GenericFWLasso):
         sol, _ = apgd.stats()
 
         # Solution is 0 on upsampled arrays, subsample it back to len(support_indices)
+        #print("Full sol:", sol["x"])
         solSubsampled = subsampling(sol["x"])
+        #print("Support indices", support_indices)
+        #print("Subsampled sol", solSubsampled)
 
         #return sol["x"]
         return solSubsampled
