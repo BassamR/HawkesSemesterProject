@@ -122,27 +122,41 @@ class HawkesLikelihood():
         beta = self.beta
         g = self.g
 
+        # Turn self.t into a numpy array by padding with NaNs
+        max_len = max(len(row) for row in self.t) # Find the maximum length of rows in self.t
+        t_array = np.full((len(self.t), max_len), np.nan) # Init NaN array
+
+        for i, row in enumerate(self.t):
+            t_array[i, :len(row)] = row  # Fill the array with the actual values from self.t
+
         # Initialize matrix
         self.A = [np.zeros((self.k[j]+1, self.M+1)) for j in range(self.M)]
 
-        B = np.zeros(self.M)  # to help compute the last row of A^j
+        # Compute last row of every A^j
+        B = np.zeros(self.M)
         for n in range(self.M):
             B[n] = betainv * sum((self.T - tnl + betainv)*np.exp(-beta*(self.T - tnl)) - betainv for tnl in self.t[n])
 
         # Fill out A^j for every j
         for j in range(self.M):
+            print(f'Computing A^{j+1} out of {self.M}, k{j+1}={self.k[j]}')
             # First column computation
             self.A[j][:, 0] = 1
             self.A[j][-1, 0] = -self.T
 
-            # Fill out the rest of the matrix (-1 because last row is filled out separately)
-            for i in range(self.A[j].shape[0] - 1):
-                for n in range(self.M):
-                    self.A[j][i, n+1] = sum(g(self.t[j][i] - tnl) for tnl in self.t[n] if tnl < self.t[j][i])
-
             # Fill out last row
-            for n in range(self.M):
-                self.A[j][-1, n+1] = B[n]
+            self.A[j][-1, 1:] = B
+
+            # Compute the rest of the matrix row by row
+            for i in range(self.A[j].shape[0] - 1):
+                # Create a mask for values more than self.t[j][i]
+                mask = t_array >= self.t[j][i]
+                diff = self.t[j][i] - t_array
+                diff[mask] = -1  # g is an exponential kernel, do this to avoid overflow
+                filtered_values = g(diff)
+                
+                result = np.nansum(filtered_values, axis=1)
+                self.A[j][i, 1:] = result[:self.M]
 
         return
 
