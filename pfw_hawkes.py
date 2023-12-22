@@ -39,8 +39,10 @@ class _GenericFWLasso(pxs.Solver):
 
     def __init__(
             self,
-            hpL: HawkesLikelihood,  # modified this (data -> hpL, for hawkes process likelihood)
+            convexOp: pxo.DiffMap,
             forwardOp: pxo.LinOp,
+            negLogL: pxo.DiffMap,
+            M: int,  # number of processes
             lambda_: float,
             *,
             folder=None,  # typ.Optional[pyct.PathLike] = None,
@@ -67,16 +69,19 @@ class _GenericFWLasso(pxs.Solver):
         )
         self.lambda_ = pxrt.coerce(lambda_)
         self.forwardOp = forwardOp
-        self.hpL = hpL
+        self.convexOp = convexOp
+        self.negLogL = negLogL
+        self.M = M
+        #self.hpL = hpL
         #self.data = pxrt.coerce(data)  # commented this
         # modified this
         # self._data_fidelity = (
         #         0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp
         # )
         self._data_fidelity = (
-            self.hpL.negLogL
+            self.negLogL
         )
-        self.regIndices = [index for k in range(self.hpL.M) for index in range(k*self.hpL.M + k + 1, k*self.hpL.M + k + self.hpL.M + 1)]
+        self.regIndices = [index for k in range(self.M) for index in range(k*self.M + k + 1, k*self.M + k + self.M + 1)]
         self._penalty = ut.L1NormPartialReg(shape=(1, self.forwardOp.shape[1]), 
                                              S=self.regIndices, 
                                              regLambda=self.lambda_)
@@ -146,7 +151,7 @@ class _GenericFWLasso(pxs.Solver):
         # return 0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(
         #     -self.data) * self.rs_forwardOp(support_indices=support_indices)
         # modified this
-        return self.hpL.E * self.rs_forwardOp(support_indices=support_indices)
+        return self.convexOp * self.rs_forwardOp(support_indices=support_indices)
 
     def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxo.LinOp:
         """
@@ -211,8 +216,10 @@ class PFWLasso(_GenericFWLasso):
 
     def __init__(
             self,
-            hpL: HawkesLikelihood,
+            convexOp: pxo.DiffMap,
             forwardOp: pxo.LinOp,
+            negLogL: pxo.DiffMap,
+            M: int,  # number of processes
             lambda_: float,
             ms_threshold: float = 0.7,  # multi spikes threshold at init
             init_correction_prec: float = 0.2,
@@ -267,8 +274,10 @@ class PFWLasso(_GenericFWLasso):
         self._min_correction_steps = min_correction_steps
         self._max_correction_steps = max_correction_steps
         super().__init__(
-            hpL=hpL,
             forwardOp=forwardOp,
+            convexOp=convexOp,
+            M=M,
+            negLogL=negLogL,
             lambda_=lambda_,
             folder=folder,
             exist_ok=exist_ok,
@@ -298,13 +307,13 @@ class PFWLasso(_GenericFWLasso):
         super(PFWLasso, self).m_init(**kwargs)
         xp = pxu.get_array_module(self._mstate["val"])
         mst = self._mstate
-        # Init x0 = 1 on the mu indices, 0 on the alpha indices
-        self.mu_indices = np.array([k + k*self.hpL.M for k in range(self.hpL.M)], dtype="int32")
+        # Init x0 = 1/2 on the mu indices, 0 on the alpha indices
+        self.mu_indices = np.array([k + k*self.M for k in range(self.M)], dtype="int32")
         mst["pos"] = self.mu_indices
         #mst["pos"] = np.hstack([mst["pos"], np.array([71, 70, 69, 68, 67])])
-        mst["val"] = np.array([1 for _ in range(mst["pos"].shape[0])], dtype=pxrt.getPrecision().value)
+        mst["val"] = 0.5*np.array([1 for _ in range(mst["pos"].shape[0])], dtype=pxrt.getPrecision().value)
 
-        print('initial value:', self.hpL.E(self.rs_forwardOp(mst["pos"]).apply(mst["val"])))
+        print('initial value:', self.convexOp(self.rs_forwardOp(mst["pos"]).apply(mst["val"])))
 
         mst["delta"] = None  # initial buffer for multi spike thresholding
         mst["correction_prec"] = self._init_correction_prec
@@ -314,7 +323,7 @@ class PFWLasso(_GenericFWLasso):
         #print('val:', mst["val"])
         #print('pos:', mst['pos'])
         #mgrad = self.forwardOp.adjoint(self.data - self.rs_forwardOp(mst["pos"]).apply(mst["val"])) / self.lambda_
-        mgrad = -self.forwardOp.adjoint(self.hpL.E.grad(self.rs_forwardOp(mst["pos"]).apply(mst["val"]))) / self.lambda_
+        mgrad = -self.forwardOp.adjoint(self.convexOp.grad(self.rs_forwardOp(mst["pos"]).apply(mst["val"]))) / self.lambda_
         mgrad_reduced = mgrad[self.regIndices]  # gradient on regularized coordinates
         if self._astate["positivity_c"]:
             mst["dcv"] = mgrad_reduced.max()
