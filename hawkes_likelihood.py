@@ -174,5 +174,5 @@ class HawkesLikelihood():
         return
 
     def g(self, t):
-        # Causal Green's function of L = (D + beta*I)^2
-        return t * np.exp(-self.beta*t) * (t >= 0)
+        # Normalized causal Green's function of L = (D + beta*I)^2
+        return self.beta * t * np.exp(-self.beta*t) * (t >= 0)
