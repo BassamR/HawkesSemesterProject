@@ -25,7 +25,7 @@ def plot_counting_process(P=None, M=1, axe=None) -> None:
     if M > 1:
         for i in range(0, len(P)):
             axe.step(x=P[i], y=counting_process(P[i]), where='post', label=f'$N_{i}(t)$')
-            axe.scatter(P[i], [0] * len(P[i]), marker='x', color=colors[i], label=f'Arrival times of $N_{i}$')
+            axe.scatter(P[i], [0] * len(P[i]), marker='x', color=colors[i%3], label=f'Arrival times of $N_{i}$')
     else:
         axe.step(x=P, y=counting_process(P), where='post', label='$N(t)$')
         axe.scatter(P, [0] * len(P), marker='x', color='red', label='Arrival times of $N$')
@@ -98,7 +98,7 @@ def plot_intensity_multivariate(P, i, T, mu, h, axe) -> None:
     axe.set_ylabel('Intensity')
     for n in range(0, M):
         # Plot arrival times
-        axe.scatter(P[n], [0] * len(P[n]), marker='x', color=colors[n], label=f'Arrival times of $N_{n}$')
+        axe.scatter(P[n], [0] * len(P[n]), marker='x', color=colors[n%3], label=f'Arrival times of $N_{n}$')
     axe.legend()
 
     return
