@@ -1,5 +1,5 @@
 """
-Author: Adrian Jarret (+ modifications by Bassam El Rawas)
+Author: Adrian Jarret, modifications by Bassam El Rawas.
 
 Module implementing the Polyatomic Frank-Wolfe algorithm for the Multivariate Hawkes
 Likelihood problem.
@@ -32,7 +32,7 @@ __all__ = [
 
 class _GenericFWLasso(pxs.Solver):
     r"""
-    Base class for Frank-Wolfe algorithms (FW) for the LASSO problem.
+    Base class for Frank-Wolfe algorithms (FW) for the Multivariate Hawkes Likelihood problem.
 
     This is an abstract class that cannot be instantiated.
     """
@@ -126,14 +126,14 @@ class _GenericFWLasso(pxs.Solver):
         ``Solver``.
         """
         track_objective = kwargs.pop("track_objective", True)
-        positivity_c = kwargs.pop("positivity_constraint", True)  # i changed this
+        positivity_c = kwargs.pop("positivity_constraint", True)  # Stays true by default
         self._astate["positivity_c"] = positivity_c
 
         super().fit(track_objective=track_objective, **kwargs)
         self._mstate["x"] = self._dense_iterate
 
-    # rs = restricted support
     def rs_data_fid(self, support_indices: pxt.NDArray) -> pxo.DiffFunc:
+        # rs = restricted support
         return self.convexOp * self.rs_forwardOp(support_indices=support_indices)
 
     def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxo.LinOp:
@@ -154,40 +154,14 @@ class _GenericFWLasso(pxs.Solver):
 
 class PFWLasso(_GenericFWLasso):
     r"""
-    Polyatomic version of the Frank-Wolfe algorithm (FW) specifically design to solve the LASSO problem of the form
-
-    .. math ::
-
-        {\argmin_{\mathbf{x} \in \mathbb{R}^N} \; \frac{1}{2} \lVert \mathbf{y} - \mathbf{G}(\mathbf{x}) \rVert_2^2
-        + \lambda \lVert \mathbf{x} \rVert_1 }
-
-    where:
-
-    * :math:`\mathbf{G}:\mathbb{R}^N\rightarrow\mathbb{C}^L` is a *linear* operator, referred to as *forward*
-     or *measurement* operator.
-    * :math:`\mathbf{y}\in\mathbb{C}^L` is the vector of measurements data.
-    * :math:`\lambda>0` is the *regularization* or *penalty* parameter.
-
-    This algorithm is presented in the paper [PFW]_ as an improvement over the Vanilla FW algorithm in order to
-    converge faster to a solution. Compared to other LASS solvers, it is particularly efficient when the solution is
-    supposed to be very sparse, in terms of convergence time as well as memory requirements.
+    Polyatomic version of the Frank-Wolfe algorithm (FW) specifically designed to solve the multivariate
+    Hawkes likelihood problem.
 
     The FW algorithms ensure convergence of the iterates in terms of the value of the objective function with a
     convergence rate of :math:`\mathcal{O}(1/k)` [RevFW]_. Consequently, the default stopping criterion is set as a
     threshold over the relative improvement of the value of the objective function. The algorithm stops if the relative
-    improvement is below 1e-4. If this default stopping criterion is used, you must not fit the algorithm with argument
+    improvement is below 1e-4 by default. If this default stopping criterion is used, you must not fit the algorithm with argument
     ``track_objective=False``.
-
-    **Remark 1:** The array module used in the algorithm iterations is inferred from the module of the input
-        measurements.
-
-    **Remark 2:** The second step of the PFW algorithm consists in computing/updating the weights attributed to the
-    atoms. To do so, the algorithm solves a LASSO problem with a restricted support defined by the selected atoms.
-    The implementation provided for this step makes use of an injection/sub-sampling operator that allows to extract
-    the sub-problem of interest. This generic procedure might be sub-optimal and could be improved depending on the
-    forward operator (e.g. non-uniform FFT as a restricted support FFT). The interested user can provide an
-    alternative and posisbly more efficient method for the correction of the weights by overriding the
-    ``.rs_correction()`` method in a child class.
 
     ``PolyatomicFWforLasso.fit()`` **Parametrisation**
 
@@ -229,16 +203,21 @@ class PFWLasso(_GenericFWLasso):
 
         Parameters
         ----------
-        data: NDArray
-            (..., L) measurements term(s) in the LASSO objective function.
         forwardOp: LinOp
-            (N, L) measurement operator in the LASSO objective function.
+            Linear operator used to define the log-likelihood of a HP.
+        convexOp: DiffMap
+            Convex operator used to define the log-likelihood of a HP.
+        M: int
+            Number of neurons = number of processes of the HP.
+        negLogL: DiffMap
+            Negative log-likelihood function = the objective function.
+            It has been shown that negLogL(x) = convexOp(forwardOp(x)).
         lambda_: float
             Regularisation parameter from the LASSO problem.
         ms_threshold: float
             Initial threshold for identifying the first atoms, given as a rate of the dual certificate value. This
             parameter impacts the number of atomes chosen at the first step, but also at all the following iterations.
-            Low `ms_threshold` value implies a lot of flexiility in the choice of the atoms, whereas high value leads
+            Low `ms_threshold` value implies a lot of flexibility in the choice of the atoms, whereas high value leads
             to restrictive selection and thus very few atomes at each iteration.
         init_correction_prec: float
             Precision of the first stopping criterion for the step of correction of the weights at first iteration.
@@ -261,7 +240,7 @@ class PFWLasso(_GenericFWLasso):
             convexOp=convexOp,
             M=M,
             negLogL=negLogL,
-            lambda_=lambda_,
+            lambda_=lambda_,  # regularization parameter
             folder=folder,
             exist_ok=exist_ok,
             stop_rate=stop_rate,
@@ -359,9 +338,10 @@ class PFWLasso(_GenericFWLasso):
 
     def rs_correction(self, support_indices: pxt.NDArray, precision: float) -> pxt.NDArray:
         r"""
-        Method to update the weights after the selection of the new atoms. It solves a LASSO problem with a
-        restricted support corresponding to the current set of active indices (active atoms). As mentioned,
-        this method should be overriden in a child class for case-specific improved implementation.
+        Method to update the weights after the selection of the new atoms. It solves a multivariate HP 
+        likelihood problem with a restricted support corresponding to the current set of active indices 
+        (active atoms). As mentioned,this method should be overriden in a child class for case-specific 
+        improved implementation.
 
         Parameters
         ----------
@@ -478,8 +458,9 @@ class PFWLasso(_GenericFWLasso):
 
     def post_process(self):
         """
-        Solve the LASSO objective problem constraining the support of the solution to be included within the support of
-        the last PFW iterate. The stopping criterion of the problem is set to the final precision of reweighting steps.
+        Solve the HP likelihood objective problem constraining the support of the solution to be included 
+        within the support of the last PFW iterate. The stopping criterion of the problem is set to the 
+        final precision of reweighting steps.
         """
         mst = self._mstate
         mst["val"] = self.rs_correction(mst["pos"], self._final_correction_prec)

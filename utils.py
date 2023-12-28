@@ -1,6 +1,8 @@
 """
-Author: Adrian Jarret (+ Bassam El Rawas with some modifications)
-This file implements a few common operators, useful in the development of PFW for the LASSO problem.
+Author: Adrian Jarret, modifications by Bassam El Rawas with some modifications.
+
+This file implements a few common operators, useful in the development of PFW for the Hawkes
+likelihood problem.
 """
 
 import numpy as np
@@ -16,36 +18,6 @@ __all__ = [
     "L1NormPartialReg",
     "L1NormPartialPositivityConstraint"
 ]
-
-# class NonNegativeOrthant(pxo.ProxFunc):
-#     """
-#     Indicator function of the non-negative orthant (positivity constraint).
-#     """
-#
-#     def __init__(self, shape: pxt.OpShape):
-#         super().__init__(shape=shape)
-#
-#     @pxrt.enforce_precision(i="arr")
-#     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
-#         xp = pxu.get_array_module(arr)
-#         if arr.ndim <= 1:
-#             res = 0 if xp.all(arr >= 0) else xp.inf
-#             return xp.r_[res].astype(arr.dtype)
-#         else:
-#             res = xp.zeros(arr.shape[:-1])
-#             res[xp.any(arr < 0, axis=-1)] = xp.infty
-#             return res.astype(arr.dtype)
-#
-#     @pxrt.enforce_precision(i="arr")
-#     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
-#         xp = pxu.get_array_module(arr)
-#         res = xp.copy(arr)
-#         res[res < 0] = 0
-#         return res
-#
-#     def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-#         pass
-
 
 class L1NormPositivityConstraint(pxo.ProxFunc):
     def __init__(self, shape: pxt.OpShape):
