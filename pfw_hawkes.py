@@ -310,11 +310,7 @@ class PFWLasso(_GenericFWLasso):
         # Init x0 = 1/2 on the mu indices, 0 on the alpha indices
         self.mu_indices = np.array([k + k*self.M for k in range(self.M)], dtype="int32")
         mst["pos"] = self.mu_indices
-        #mst["pos"] = np.hstack([mst["pos"], np.array([71, 70, 69, 68, 67])])
         mst["val"] = 0.5*np.array([1 for _ in range(mst["pos"].shape[0])], dtype=pxrt.getPrecision().value)
-
-        print('initial value:', self.convexOp(self.rs_forwardOp(mst["pos"]).apply(mst["val"])))
-
         mst["delta"] = None  # initial buffer for multi spike thresholding
         mst["correction_prec"] = self._init_correction_prec
 
@@ -371,21 +367,6 @@ class PFWLasso(_GenericFWLasso):
 
         #print('Dense iterate after rs_corr:', self._dense_iterate)
 
-        # elif mst["pos"].size == 1:  # case 1-sparse solution => the solution can be computed explicitly
-        #     print('case 1-sparse solution entered')
-        #     tmp = xp.zeros(self.forwardOp.shape[1], dtype=pxrt.getPrecision().value)
-        #     tmp[mst["pos"]] = 1.0
-        #     column = self.forwardOp(tmp)
-        #     corr = xp.dot(self.data, column).real
-        #     if abs(corr) <= self.lambda_:
-        #         mst["val"] = xp.zeros(1, dtype=pxrt.getPrecision().value)
-        #     elif corr > self.lambda_:
-        #         mst["val"] = np.r_[
-        #             (corr - self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
-        #     else:
-        #         mst["val"] = np.r_[
-        #             (corr + self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
-
         if self._remove_positions:
             to_keep = (abs(mst["val"]) > 1e-5).nonzero()[0]
             ast = self._astate
@@ -423,18 +404,17 @@ class PFWLasso(_GenericFWLasso):
             )
             return stop_crit
 
-        injection = pxop.SubSample(self.forwardOp.shape[1], support_indices).T
-        subsampling = pxop.SubSample(self.forwardOp.shape[1], support_indices)
-
-        x0 = injection(self._mstate["val"])
-        dim = x0.shape[0]
-        rs_data_fid = self._data_fidelity
+        #injection = pxop.SubSample(self.forwardOp.shape[1], support_indices).T
+        #subsampling = pxop.SubSample(self.forwardOp.shape[1], support_indices)
+        #x0 = injection(self._mstate["val"])
+        #dim = x0.shape[0]
+        #rs_data_fid = self._data_fidelity
 
         #print("support indices", np.sort(support_indices))
 
-        # rs_data_fid = self.rs_data_fid(support_indices)
-        # x0 = self._mstate["val"]
-        # dim = x0.shape[0]
+        rs_data_fid = self.rs_data_fid(support_indices)
+        x0 = self._mstate["val"]
+        dim = x0.shape[0]
         # if self._astate["positivity_c"]:
         #     penalty = ut.L1NormPositivityConstraint(shape=(1, dim))
         # else:
@@ -442,14 +422,11 @@ class PFWLasso(_GenericFWLasso):
         #     penalty = pxop.L1Norm(dim)
         # apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
 
-        # quickRsForwardOp = self.rs_forwardOp(support_indices=support_indices)
-        # testX = np.ones(quickRsForwardOp.shape[1])
-        # testXimage = quickRsForwardOp(testX)
-        # print('testx:', testXimage[-20:])
-
-        # TODO: implement penalty without upsampling x0
-        # inside penalty, upsample x, apply all the stuff to it, return downsampled x
-        penalty = ut.L1NormPartialPositivityConstraint(shape=(1, dim), S=self.regIndices, regLambda=self.lambda_)
+        penalty = ut.L1NormPartialPositivityConstraint(shape=(1, dim),
+                                                       totalSize=self.forwardOp.shape[1],
+                                                       S=self.regIndices, 
+                                                       regLambda=self.lambda_,
+                                                       supportIndices=support_indices)
         apgd = PGD(rs_data_fid, penalty, show_progress=False)
         stop = pxos.MaxIter(n=self._min_correction_steps)  # min number of reweighting steps
         if not self._astate["lock"]:
@@ -467,12 +444,12 @@ class PFWLasso(_GenericFWLasso):
 
         # Solution is 0 on upsampled arrays, subsample it back to len(support_indices)
         #print("Full sol:", sol["x"])
-        solSubsampled = subsampling(sol["x"])
+        #solSubsampled = subsampling(sol["x"])
         #print("Support indices", support_indices)
         #print("Subsampled sol", solSubsampled)
 
-        #return sol["x"]
-        return solSubsampled
+        return sol["x"]
+        #return solSubsampled
 
     def diagnostics(self, log: bool = False):
         import matplotlib.pyplot as plt
