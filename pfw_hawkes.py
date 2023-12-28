@@ -72,12 +72,6 @@ class _GenericFWLasso(pxs.Solver):
         self.convexOp = convexOp
         self.negLogL = negLogL
         self.M = M
-        #self.hpL = hpL
-        #self.data = pxrt.coerce(data)  # commented this
-        # modified this
-        # self._data_fidelity = (
-        #         0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp
-        # )
         self._data_fidelity = (
             self.negLogL
         )
@@ -85,11 +79,8 @@ class _GenericFWLasso(pxs.Solver):
         self._penalty = ut.L1NormPartialReg(shape=(1, self.forwardOp.shape[1]), 
                                              S=self.regIndices, 
                                              regLambda=self.lambda_)
-        #self._penalty = self.lambda_ * pxop.L1Norm(dim=self.forwardOp.shape[1])
-        #self._bound = 0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(data)[0] / self.lambda_
 
     def m_init(self, **kwargs):
-        #xp = pxu.get_array_module(self.data)  # i commented this
         mst = self._mstate  # shorthand
         mst["dcv"] = np.inf  # "dual certificate value"
         mst["val"] = np.array([], dtype=pxrt.getPrecision().value)
@@ -116,12 +107,7 @@ class _GenericFWLasso(pxs.Solver):
         return data.get("x")
 
     def objective_func(self) -> pxt.NDArray:
-        # return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ * \
-        #     pxop.L1Norm(self._mstate["val"].shape[0]).apply(self._mstate["val"])
         injection = pxop.SubSample(self.forwardOp.shape[1], self._mstate["pos"]).T
-
-        #print('injection:', injection(self._mstate["val"]))
-
         return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) \
             + self._penalty.apply(injection(self._mstate["val"]))
 
@@ -148,9 +134,6 @@ class _GenericFWLasso(pxs.Solver):
 
     # rs = restricted support
     def rs_data_fid(self, support_indices: pxt.NDArray) -> pxo.DiffFunc:
-        # return 0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(
-        #     -self.data) * self.rs_forwardOp(support_indices=support_indices)
-        # modified this
         return self.convexOp * self.rs_forwardOp(support_indices=support_indices)
 
     def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxo.LinOp:
@@ -159,10 +142,10 @@ class _GenericFWLasso(pxs.Solver):
 
         Needs to be over-written in case of a more efficient implementation of the reduced support
         forward operator implementation (only in the forward pass).
+        
+        Possible better implementation: slice on the columns, instead of upsampling the input vector.
+        Won't change the size of the output, but will change the size of the input.
         """
-        # TODO: slice on the columns, instead of augmenting the input vector
-        # wont change the size of the output, but will change the size of the input
-
         # SubSample(N,k): R^N -> R^k, which will subsample. Transpose it to obtain
         # an upsampling operation R^k -> R^N.
         injection = pxop.SubSample(self.forwardOp.shape[1], support_indices).T
@@ -318,7 +301,6 @@ class PFWLasso(_GenericFWLasso):
         mst = self._mstate  # shorthand
         #print('val:', mst["val"])
         #print('pos:', mst['pos'])
-        #mgrad = self.forwardOp.adjoint(self.data - self.rs_forwardOp(mst["pos"]).apply(mst["val"])) / self.lambda_
         mgrad = -self.forwardOp.adjoint(self.convexOp.grad(self.rs_forwardOp(mst["pos"]).apply(mst["val"]))) / self.lambda_
         mgrad_reduced = mgrad[self.regIndices]  # gradient on regularized coordinates
         if self._astate["positivity_c"]:
@@ -404,24 +386,9 @@ class PFWLasso(_GenericFWLasso):
             )
             return stop_crit
 
-        #injection = pxop.SubSample(self.forwardOp.shape[1], support_indices).T
-        #subsampling = pxop.SubSample(self.forwardOp.shape[1], support_indices)
-        #x0 = injection(self._mstate["val"])
-        #dim = x0.shape[0]
-        #rs_data_fid = self._data_fidelity
-
-        #print("support indices", np.sort(support_indices))
-
         rs_data_fid = self.rs_data_fid(support_indices)
         x0 = self._mstate["val"]
         dim = x0.shape[0]
-        # if self._astate["positivity_c"]:
-        #     penalty = ut.L1NormPositivityConstraint(shape=(1, dim))
-        # else:
-        #     print('Something wrong, no positivity constraint')
-        #     penalty = pxop.L1Norm(dim)
-        # apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
-
         penalty = ut.L1NormPartialPositivityConstraint(shape=(1, dim),
                                                        totalSize=self.forwardOp.shape[1],
                                                        S=self.regIndices, 
@@ -435,21 +402,15 @@ class PFWLasso(_GenericFWLasso):
 
         apgd.fit(
             x0=x0,
-            tau=1 / self._data_fidelity._diff_lipschitz,
+            tau=1 / self._data_fidelity._diff_lipschitz, # TODO: maybe lipschitz constant isnt right?
+            #tau = 1e-6,
             stop_crit=(stop | pxos.MaxDuration(t=dt.timedelta(seconds=1000)))
         )
         self._mstate["correction_iterations"].append(apgd.stats()[1]["iteration"][-1])
         self._mstate["correction_durations"].append(apgd.stats()[1]["duration"][-1])
         sol, _ = apgd.stats()
 
-        # Solution is 0 on upsampled arrays, subsample it back to len(support_indices)
-        #print("Full sol:", sol["x"])
-        #solSubsampled = subsampling(sol["x"])
-        #print("Support indices", support_indices)
-        #print("Subsampled sol", solSubsampled)
-
         return sol["x"]
-        #return solSubsampled
 
     def diagnostics(self, log: bool = False):
         import matplotlib.pyplot as plt
