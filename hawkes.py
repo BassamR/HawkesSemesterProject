@@ -1,4 +1,6 @@
 """
+Author: Bassam El Rawas
+
 Module containing functions to simulate and plot a univariate Hawkes Process.
 """
 
@@ -8,8 +10,12 @@ import matplotlib.pyplot as plt
 class UnivariateHP:
     """Class used to simulate realizations of a univariate HP. Stores its parameters.
     
-    :param mu: Background intensity.
-    :param h: Excitation function.
+    Parameters
+    ----------
+    mu: float
+        Background intensity.
+    h: function
+        Excitation function. Must be causal.
     """
     def __init__(self, mu, h):
         self.mu = mu  # background intensity
@@ -50,9 +56,15 @@ class UnivariateHP:
 
 class MultivariateHP:
     """Class used to simulate realizations of a multivariate HP. Stores its parameters.
-    Supposes the excitation functions are all order 2 exponential B-splines.
 
-    :param:
+    Parameters
+    ----------
+    M: int
+        Number of processes.
+    mu: array
+        (M, ) Array of background intensities.
+    h: array
+        (M, M) array of excitation functions. Each function must be causal.
     """
     def __init__(self, M, mu, h) -> None:
         self.M = M  # number of neurons
