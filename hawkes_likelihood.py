@@ -42,8 +42,7 @@ class HawkesLikelihood():
     """
     def __init__(self, path: str, beta: float) -> None:
         # Initialize constants
-        self.data = None  # list of arrival times
-        self.t = None  # same as data, but for easier notation
+        self.t = None  # list of arrival times
         self.T = None  # largest arrival time
         
         self.M = None  # total number of neurons
@@ -96,19 +95,18 @@ class HawkesLikelihood():
         """
         Initializes constants based on given realization.
         """
-        self.data = pd.read_csv(path, header=None)
-        self.data = [self.data.iloc[i].values for i in range(len(self.data))]
+        self.t = pd.read_csv(path, header=None)
+        self.t = [self.t.iloc[i].values for i in range(len(self.t))]
 
         # Obtain useful constants
-        self.M = len(self.data)  # number of neurons
+        self.M = len(self.t)  # number of neurons
 
-        self.t = self.data  # pour faciliter les notations apres
         for i in range(self.M):
             self.t[i] = self.t[i][np.nonzero(self.t[i])]  # get rid of arrival times = 0
 
         self.k = [len(ti) for ti in self.t] 
         # TODO: Do i need T to be the last arrival, or > last arrival ?
-        self.T = max(max(self.t[i]) for i in range(self.M)) + 10e-5
+        self.T = max(max(self.t[i]) for i in range(self.M)) + 1e-8
         self.K = sum(self.k)
 
         return
