@@ -79,7 +79,7 @@ class HawkesLikelihood():
         S = [int(si)-1 for si in S]  # convert to int, decaler de -1 pour avoir tout entre 0 et M+K-1
 
         # Define the complement of S
-        allIndices = list(range(0, self.M + self.K))  # or range(1, M+K+1)
+        allIndices = list(range(0, self.M + self.K))
         notS = list(set(allIndices) - set(S))
 
         # Initialize operator E
@@ -187,4 +187,4 @@ class HawkesLikelihood():
 
     def g(self, t):
         # Normalized causal Green's function of L = (D + beta*I)^2
-        return self.beta * t * np.exp(-self.beta*t) * (t >= 0)
+        return self.beta * self.beta * t * np.exp(-self.beta*t) * (t >= 0)
