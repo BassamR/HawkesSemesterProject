@@ -322,7 +322,6 @@ class PFWLasso(_GenericFWLasso):
             if mst["pos"].size == 1:
                 print('case 1-sparse solution')
             mst["val"] = self.rs_correction(mst["pos"], self._mstate["correction_prec"])
-            #print('Pos given to apgd', np.sort(mst["pos"]))
         else:
             mst["val"] = xp.array([], dtype=pxrt.getPrecision().value)
 
@@ -382,8 +381,7 @@ class PFWLasso(_GenericFWLasso):
 
         apgd.fit(
             x0=x0,
-            tau=1 / self._data_fidelity._diff_lipschitz, # TODO: maybe lipschitz constant isnt right?
-            #tau = 1e-6,
+            tau=1/self._data_fidelity._diff_lipschitz, # TODO: maybe lipschitz constant isnt right?
             stop_crit=(stop | pxos.MaxDuration(t=dt.timedelta(seconds=1000)))
         )
         self._mstate["correction_iterations"].append(apgd.stats()[1]["iteration"][-1])
