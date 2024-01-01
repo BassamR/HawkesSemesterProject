@@ -105,7 +105,6 @@ class HawkesLikelihood():
             self.t[i] = self.t[i][np.nonzero(self.t[i])]  # get rid of arrival times = 0
 
         self.k = [len(ti) for ti in self.t] 
-        # TODO: Do i need T to be the last arrival, or > last arrival ?
         self.T = max(max(self.t[i]) for i in range(self.M)) + 1e-8
         self.K = sum(self.k)
 
@@ -187,4 +186,4 @@ class HawkesLikelihood():
 
     def g(self, t):
         # Normalized causal Green's function of L = (D + beta*I)^2
-        return self.beta * self.beta * t * np.exp(-self.beta*t) * (t >= 0)
+        return (self.beta ** 2) * t * np.exp(-self.beta*t) * (t >= 0)
