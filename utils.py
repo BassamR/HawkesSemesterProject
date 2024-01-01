@@ -1,5 +1,5 @@
 """
-Author: Adrian Jarret, modifications by Bassam El Rawas with some modifications.
+Author: Adrian Jarret, with modifications by Bassam El Rawas.
 
 This file implements a few common operators, useful in the development of PFW for the Hawkes
 likelihood problem.
