@@ -95,8 +95,8 @@ class HawkesLikelihood():
         """
         Initializes constants based on given realization.
         """
-        if path is not None and list is not None:
-            raise ValueError("Specify either a path or an arrival array!")
+        if path is not None and arrivalArray is not None:
+            raise ValueError("Specify either a path OR an arrival array!")
 
         if path is not None:
             self.t = pd.read_csv(path, header=None)
