@@ -40,7 +40,7 @@ class HawkesLikelihood():
     Class that, given a realization, stores parameters relevant to it and defines the necessary
     operators to be able to represent -log(likelihood) as a Pyxu DiffMap.
     """
-    def __init__(self, path: str, beta: float) -> None:
+    def __init__(self, path: str = None, arrivalArray: list = None, beta: float = None) -> None:
         # Initialize constants
         self.t = None  # list of arrival times
         self.T = None  # largest arrival time
@@ -60,7 +60,7 @@ class HawkesLikelihood():
         self.betainv = 1/self.beta
 
         # Read neuron spike data, then convert to list of np arrays
-        self.init_constants(path)
+        self.init_constants(path=path, arrivalArray=arrivalArray)
 
         # Compute discrete likelihood matrices A^j, then define them as LinOps
         self.init_matrix_A()
@@ -91,18 +91,26 @@ class HawkesLikelihood():
 
         return
     
-    def init_constants(self, path: str) -> None:
+    def init_constants(self, path: str = None, arrivalArray: list = None) -> None:
         """
         Initializes constants based on given realization.
         """
-        self.t = pd.read_csv(path, header=None)
-        self.t = [self.t.iloc[i].values for i in range(len(self.t))]
+        if path is not None and list is not None:
+            raise ValueError("Specify either a path or an arrival array!")
 
-        # Obtain useful constants
-        self.M = len(self.t)  # number of neurons
+        if path is not None:
+            self.t = pd.read_csv(path, header=None)
+            self.t = [self.t.iloc[i].values for i in range(len(self.t))]
 
-        for i in range(self.M):
-            self.t[i] = self.t[i][np.nonzero(self.t[i])]  # get rid of arrival times = 0
+            # Obtain useful constants
+            self.M = len(self.t)  # number of neurons
+
+            for i in range(self.M):
+                self.t[i] = self.t[i][np.nonzero(self.t[i])]  # get rid of arrival times = 0
+        
+        if arrivalArray is not None:
+            self.t = arrivalArray
+            self.M = len(self.t)
 
         self.k = [len(ti) for ti in self.t] 
         self.T = max(max(self.t[i]) for i in range(self.M)) + 1e-8
