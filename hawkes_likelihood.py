@@ -171,7 +171,7 @@ class HawkesLikelihood():
         """
         _, ax = plt.subplots(1, 1, figsize= (10,8))
         for i in range(self.M):
-            ax.plot(self.t[i], np.zeros(len(self.t[i]))+i, linestyle='', marker='+')
+            ax.plot(self.t[i], np.zeros(len(self.t[i]))+i, linestyle='', marker='+', color='C0')
         ax.set_xlabel('Spike trains')
         ax.set_ylabel('Neurons')
         plt.show()
