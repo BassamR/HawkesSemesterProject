@@ -24,13 +24,12 @@ import pyxu.info.ptype as pxt
 from pyxu.opt.solver.pgd import PGD
 
 __all__ = [
-    "VFWLasso",
-    "PFWLasso",
+    "PFWHawkes",
     "dcvStoppingCrit",
 ]
 
 
-class _GenericFWLasso(pxs.Solver):
+class _GenericFW(pxs.Solver):
     r"""
     Base class for Frank-Wolfe algorithms (FW) for the Multivariate Hawkes Likelihood problem.
 
@@ -152,7 +151,7 @@ class _GenericFWLasso(pxs.Solver):
         return self.forwardOp * injection
 
 
-class PFWLasso(_GenericFWLasso):
+class PFWHawkes(_GenericFW):
     r"""
     Polyatomic version of the Frank-Wolfe algorithm (FW) specifically designed to solve the multivariate
     Hawkes likelihood problem.
@@ -163,7 +162,7 @@ class PFWLasso(_GenericFWLasso):
     improvement is below 1e-4 by default. If this default stopping criterion is used, you must not fit the algorithm with argument
     ``track_objective=False``.
 
-    ``PolyatomicFWforLasso.fit()`` **Parametrisation**
+    ``PolyatomicFW.fit()`` **Parametrisation**
 
     track_objective: Bool
         Indicator to keep track of the value of the objective function along the iterations.
@@ -213,7 +212,7 @@ class PFWLasso(_GenericFWLasso):
             Negative log-likelihood function = the objective function.
             It has been shown that negLogL(x) = convexOp(forwardOp(x)).
         lambda_: float
-            Regularisation parameter from the LASSO problem.
+            Regularisation parameter.
         ms_threshold: float
             Initial threshold for identifying the first atoms, given as a rate of the dual certificate value. This
             parameter impacts the number of atomes chosen at the first step, but also at all the following iterations.
@@ -266,7 +265,7 @@ class PFWLasso(_GenericFWLasso):
         super().fit(**kwargs)
 
     def m_init(self, **kwargs):
-        super(PFWLasso, self).m_init(**kwargs)
+        super(PFWHawkes, self).m_init(**kwargs)
         xp = pxu.get_array_module(self._mstate["val"])
         mst = self._mstate
         # Init x0 = 1/2 on the mu indices, 0 on the alpha indices
@@ -448,7 +447,7 @@ class PFWLasso(_GenericFWLasso):
                 hist['Memorize[objective_func]'][0] - hist['Memorize[objective_func]'][-1]), label="PFW",
                     s=20,
                     marker="+")
-        plt.title('LASSO objective function')
+        plt.title('Objective function')
         plt.legend()
         plt.xlim(left=0.)
         plt.xlabel("Time")
